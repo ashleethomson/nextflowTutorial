@@ -1,7 +1,5 @@
 #!/usr/bin/env nextflow
 
-println "\nI want to BLAST $params.query to $params.dbDir$params.dbName using $params.threads CPUs and output it to $params.outdir\n"
-
 def helpMessage() {
   log.info """
         Usage:
@@ -24,6 +22,8 @@ def helpMessage() {
         --help                         This usage statement.
         """
 }
+
+println "\nI want to BLAST $params.query to $params.dbDir$params.dbName using $params.threads CPUs and output it to $params.outdir\n"
 
 // Show help message
 if (params.help) {
