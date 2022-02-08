@@ -19,7 +19,8 @@ def helpMessage() {
         --threads                      Number of CPUs to use during blast job [16]
         --chunkSize                    Number of fasta records to use when splitting the query fasta file
         --app                          BLAST program to use [blastn;blastp,tblastn,blastx]
-        --help                         This usage statement.
+        --help                         This usage statement
+        --genome                       If specified with a genome fasta file, a BLAST database will be generated for the genome
         """
 }
 
@@ -34,22 +35,56 @@ println "\nI want to BLAST $params.query to $params.dbDir$params.dbName using $p
 Channel
   .fromPath(params.query)
   .splitFasta(by: params.chunkSize, file:true)
-  .into { queryFile_ch }
+  .set { queryFile_ch }
+
+
+if (params.genome) {
+  genomefile_ch = Channel
+    .fromPath(params.genome)
+    .map { file -> tuple(file.simpleName, file.parent, file) }
+
+  process runMakeBlastDB {
+
+    input:
+    set val(dbName), path(dbDir), file(FILE) from genomefile_ch
+
+    output:
+    val dbName into dbName_ch
+    path dbDir into dbDir_ch
+
+    script:
+    """
+    makeblastdb -in ${params.genome} -dbtype 'nucl' -out $dbDir/$dbName
+    """
+  }
+
+} else{
+// This channel will grab the folder path and set it into a channel named dbDir_ch
+Channel.fromPath(params.dbDir)
+    .set { dbDir_ch }
+
+// this channel will grab the text from params.dbName.  Notice it is just from and not fromPath.  nextflow will complain if you try to grab a path from a bit of text.
+Channel.from(params.dbName)
+    .set { dbName_ch }
+}
 
 process runBlast {
 
-  label 'blast'
+  container = 'ncbi/blast'
+  publishDir "${params.outdir}/blastout"
 
   input:
   path queryFile from queryFile_ch
+  path dbDir from dbDir_ch.val
+  val dbName from dbName_ch.val
 
   output:
-  publishDir "${params.outdir}/blastout"
+  //publishDir "${params.outdir}/blastout"
   path(params.outFileName) into blast_output_ch
 
   script:
   """
-  $params.app -num_threads $params.threads -db $params.dbDir/$params.dbName -query $params.query -outfmt $params.outfmt $params.options -out $params.outFileName
+  $params.app -num_threads $params.threads -db $params.dbDir$params.dbName -query $params.query -outfmt $params.outfmt $params.options -out $params.outFileName
   """
 }
 
